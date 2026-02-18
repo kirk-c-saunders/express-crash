@@ -2,14 +2,23 @@
 import express from 'express'
 //pulls in utilities for file path management and manipulation
 import path from 'path';
+//pulls some things we need for path that we need for this to work in modules
+import { fileURLToPath } from 'url';
 //pull in our posts routes file - the ".js" is required for local files
 import posts from './routes/posts.js';
 //pull in the generic/global logger function
 import logger from './middleware/logger.js';
 //pull in generic/global error handler
 import errorHandler from './middleware/error.js';
+//pull in generic/global error handling for anything accessing a route that doesn't exist
+import notFound from './middleware/notFound.js';
 //access the port from the .env file via the installed process class
 const port = process.env.PORT || 8080;
+
+//get the directroy name
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 //adds express functionality into a variable/object we can work with
 const app = express();
 
@@ -26,7 +35,7 @@ app.use(logger);
     path.join allows us to combine multiple files/folders togeather
         So we can move from our current location into the public folder
 */
-//app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public')));
 
 /*
     ROUTES
@@ -38,11 +47,7 @@ app.use(logger);
 app.use('/api/posts', posts);
 
 // a generic error handling for accessing routes that don't exist
-app.use((req, res, next) => {
-    const error = new Error('Not Found');
-    error.status = 404;
-    next(error);
-})
+app.use(notFound);
 
 //generic error handler (must come after routes, for some reason. "Conflicts")
 app.use(errorHandler);
