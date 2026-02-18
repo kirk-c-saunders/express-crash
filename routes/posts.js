@@ -4,11 +4,26 @@ import express from 'express';
 // gives us the "Router"
 const router = express.Router();
 
-const posts = [
+let posts = [
     {id: 1, title: "Post One"},
     {id: 2, title: "Post Two"},
     {id: 3, title: "Post Three"}
 ];
+
+/*
+    Generic logger function that outputs something like: "GET https://localhost:8080/api/posts" to the console
+    Then resumes with the specific route/method
+    Added into any route as a named object inbetween the path and the callback function
+    EX: router.get('/', logger, (req, res) => {...[the stuff in the route body]...})
+
+    const logger = (req, res, next) => {
+        console.log(`${req.method} ${req.protocol}://${req.get('host')}${req.originalUrl}`);
+        next();
+    }
+
+    however we are only going to add this here if we only want it applied to individual routes
+    global stuff is handled differently
+*/
 
 /*
     Format for creating an API Endpoint:
@@ -22,7 +37,7 @@ const posts = [
 */
 
 // Get single post
-router.get('/:id', (req, res) => {
+router.get('/:id', (req, res, next) => {
     //Find the ID from the named variable in the URI and convert it to an INT
     const id = parseInt(req.params.id);
     const post = posts.filter((post) => post.id === id);
@@ -31,15 +46,17 @@ router.get('/:id', (req, res) => {
     console.log(post);
     // check to make sure we found the post
     if(!post || post.length === 0) {
-        return res.status(404).json({msg: `A post with the id of ${id} was not found`});
+        const error = new Error(`A post with the id of ${id} was not found`);
+        error.status = 404;
+        return next(error);
     }
-    
+
     res.status(200).json(post);
 });
 
 // Get all posts
 // Includes processing a "limit" query string
-router.get('/', (request, response)=> {
+router.get('/', (request, response, next) => {
     /*
         accept a number of posts limit from the query string
         /api/posts?limit=2
@@ -56,7 +73,13 @@ router.get('/', (request, response)=> {
 });
 
 //create new post
-router.post('/', (request, response) => {
+router.post('/', (request, response, next) => {
+    if(!request.body){
+        const error = new Error("Bad request. Body is missing");
+        error.status = 400;
+        return next(error);
+    }
+    
     const newPost = {
         id: posts.length + 1,
         title: request.body.title
@@ -64,7 +87,9 @@ router.post('/', (request, response) => {
 
     if(!newPost.title) {
         // use return, if the setting of the respons object is supposed to stop further processing in the function
-        return response.status(400).json({msg: 'Please include a title'});
+        const error = new Error("Please include a title");
+        error.status = 400;
+        return next(error);
     }
 
     posts.push(newPost);
@@ -72,18 +97,60 @@ router.post('/', (request, response) => {
 });
 
 // update post
-router.put('/:id', (req, res) => {
-    const id = parseInt(req.params.id);
-    const post = posts.find((post) => post.id === id);
-
-    if (!post){
-        return res
-           .status(404)
-           .json({msg: `A post with the id of ${id} was not found`});
+router.put('/:id', (req, res, next) => {
+    if(!req.body){
+        const error = new Error("Bad request. Body is missing");
+        error.status = 400;
+        return next(error);
     }
 
-    post.title = req.body.title;
-    res.status(200).json(posts);
+    if(!req.params.id){
+        const error = new Error("Bad request. Id is missing");
+        error.status = 400;
+        return next(error);
+    }
+    
+    try {
+        const id = parseInt(req.params.id);
+        const post = posts.find((post) => post.id === id);
+
+        if (!post) {
+            const error = new Error(`A post with the id of ${id} was not found`);
+            error.status = 404;
+            return next(error);
+        }
+
+        post.title = req.body.title;
+        res.status(200).json(posts);
+    } catch (error) {
+        res.status(500).json(error.message);
+    }
+
+})
+
+// delete post
+router.delete('/:id', (req, res, next) => {
+    if(!req.params.id) {
+        const error = new Error(`Bad request. Id is missing`);
+        error.status = 400;
+        return next(error);
+    }
+    
+    try {
+        const id = parseInt(req.params.id);
+        const post = posts.find((post) => post.id === id);
+
+        if (!post) {
+            const error = new Error(`A post with the id of ${id} was not found`);
+            error.status = 404;
+            return next(error);
+        }
+
+        posts = posts.filter((post) => post.id !== id);
+        res.status(200).json(posts);
+    } catch (error) {
+        res.status(500).json(error.message);
+    }
 })
 
 // we have to export this so it can be used in other places
